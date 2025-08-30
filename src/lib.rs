@@ -21,7 +21,7 @@ impl Fat16 {
         // FAT16 パース
         let (bpb, bytes) = Fat16BPB::parse(&bytes)?;
         let (ebpb, _bytes) = Fat16EBPB::parse(bytes)?;
-        let (alloc_table, bytes) = Fat16AllocTable::parse(bytes)?;
+        let (alloc_table, bytes) = Fat16AllocTable::parse(bytes, todo!())?;
         let (clusters, _) = Fat16Cluster::parse(bytes)?;
 
         Ok(Fat16 { bpb, ebpb, alloc_table, clusters })
@@ -45,8 +45,8 @@ pub struct Fat16BPB {
     pub num_fats: u8,
     // Root Entry Count (2bytes)
     pub root_entry_count: u16,
-    // Total Sectors 16 (2bytes)
-    pub total_sectors_16: u16,
+    // Total Sectors (2bytes)
+    pub total_sectors: u16,
     // Media (1byte)
     pub media: u8,
     // Sectors per FAT (2bytes)
@@ -71,7 +71,7 @@ impl Fat16BPB {
             reserved_sector_count: u16::from_le_bytes(bytes[14..16].try_into()?),
             num_fats: bytes[16],
             root_entry_count: u16::from_le_bytes(bytes[17..19].try_into()?),
-            total_sectors_16: u16::from_le_bytes(bytes[19..21].try_into()?),
+            total_sectors: u16::from_le_bytes(bytes[19..21].try_into()?),
             media: bytes[21],
             sectors_per_fat: u16::from_le_bytes(bytes[22..24].try_into()?),
             sectors_per_track: u16::from_le_bytes(bytes[24..26].try_into()?),
@@ -80,6 +80,10 @@ impl Fat16BPB {
             large_sectors: u32::from_le_bytes(bytes[32..36].try_into()?),
         };
         Ok((bpb, &bytes[36..]))
+    }
+
+    fn total_clusters(&self) -> u16 {
+
     }
 }
 
@@ -128,15 +132,28 @@ impl Fat16EBPB {
 4. dir entry の attribute が directory=0x10 ならクラスタの中身はディレクトリ
 5. archive=0x20 ならファイル
 
+
+FAT の先頭アドレス
+BPB + EBPB
+
+FAT 領域のサイズ
+num_fats * sectors_per_fat * bytes_per_sector
+
+FAT のエントリ数(クラスタ数)
+total_sectors / sectors_per_cluster
+
+root directory の先頭アドレス
+BPB + EBPB + FAT 領域のサイズ
+
 */
 
 #[derive(Debug)]
 pub struct Fat16AllocTable {
-
+    table: Vec<u16>,
 }
 
 impl Fat16AllocTable {
-    pub fn parse(bytes: &[u8]) -> Result<(Fat16AllocTable, &[u8]), Box<dyn StdError>> {
+    pub fn parse(bytes: &[u8], clusters: u16) -> Result<(Fat16AllocTable, &[u8]), Box<dyn StdError>> {
         todo!()
     }
 }
