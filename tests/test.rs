@@ -30,13 +30,13 @@ fn fatfs_crate() -> Result<(), Box<dyn StdError>> {
 #[serial]
 #[test]
 fn original_crate() -> Result<(), Box<dyn StdError>> {
-    use fat16_test::Fat16Fs;
+    use fat16_test::Fat16;
 
     // fatfs クレートを使用して FatFS を初期化
     let img_path = init_fat16()?;
-    let fs = Fat16Fs::new(img_path)?;
-
-    println!("{:?}", fs);
+    let fs = Fat16::new(img_path)?;
+    assert_eq!(fs.bpb.x86_jmp, [0xEB, 0x3C, 0x90]);
+    assert_eq!(fs.ebpb.boot_partition_signature, [0x55, 0xAA]);
 
     // 読み書きしてみる
     todo!();
