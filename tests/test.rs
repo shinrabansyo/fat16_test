@@ -3,10 +3,13 @@ use std::fs::{File, OpenOptions, self};
 use std::env;
 use std::io::Write;
 
-use fatfs::{format_volume, FatType, FormatVolumeOptions, FileSystem as FatFs, FsOptions};
+use serial_test::serial;
 
+#[serial]
 #[test]
 fn fatfs_crate() -> Result<(), Box<dyn StdError>> {
+    use fatfs::{FileSystem as FatFs, FsOptions};
+
     // fatfs クレートを使用して FatFS を初期化
     let img_path = init_fat16()?;
     let img_file = OpenOptions::new()
@@ -24,11 +27,16 @@ fn fatfs_crate() -> Result<(), Box<dyn StdError>> {
     Ok(())
 }
 
+#[serial]
 #[test]
 fn original_crate() -> Result<(), Box<dyn StdError>> {
+    use fat16_test::Fat16Fs;
+
     // fatfs クレートを使用して FatFS を初期化
     let img_path = init_fat16()?;
-    todo!();
+    let fs = Fat16Fs::new(img_path)?;
+
+    println!("{:?}", fs);
 
     // 読み書きしてみる
     todo!();
@@ -37,6 +45,8 @@ fn original_crate() -> Result<(), Box<dyn StdError>> {
 }
 
 fn init_fat16() -> Result<String, Box<dyn StdError>> {
+    use fatfs::{format_volume, FatType, FormatVolumeOptions};
+
     const MB: usize = 1024 * 1024;
 
     // 各種パス
