@@ -7,6 +7,8 @@ use std::io::Read;
 pub struct Fat16 {
     pub bpb: Fat16BPB,
     pub ebpb: Fat16EBPB,
+    pub alloc_table: Fat16AllocTable,
+    pub clusters: Vec<Fat16Cluster>,
 }
 
 impl Fat16 {
@@ -16,11 +18,13 @@ impl Fat16 {
         let mut bytes = Vec::new();
         file.read_to_end(&mut bytes).unwrap();
 
-        // FAT16 パース (512 bytes)
+        // FAT16 パース
         let (bpb, bytes) = Fat16BPB::parse(&bytes)?;
         let (ebpb, _bytes) = Fat16EBPB::parse(bytes)?;
+        let (alloc_table, bytes) = Fat16AllocTable::parse(bytes)?;
+        let (clusters, _) = Fat16Cluster::parse(bytes)?;
 
-        Ok(Fat16 { bpb, ebpb })
+        Ok(Fat16 { bpb, ebpb, alloc_table, clusters })
     }
 }
 
@@ -113,5 +117,37 @@ impl Fat16EBPB {
             boot_partition_signature: bytes[474..476].try_into()?,
         };
         Ok((ebpb, &bytes[476..]))
+    }
+}
+
+/*
+
+1. dir entry の cluster number を取得
+2. FAT[cluster number] から次の cluster number を取得
+3. cluster number が 0xFFF8 以上になるまで繰り返す(EOFまで)
+4. dir entry の attribute が directory=0x10 ならクラスタの中身はディレクトリ
+5. archive=0x20 ならファイル
+
+*/
+
+#[derive(Debug)]
+pub struct Fat16AllocTable {
+
+}
+
+impl Fat16AllocTable {
+    pub fn parse(bytes: &[u8]) -> Result<(Fat16AllocTable, &[u8]), Box<dyn StdError>> {
+        todo!()
+    }
+}
+
+#[derive(Debug)]
+pub struct Fat16Cluster {
+
+}
+
+impl Fat16Cluster {
+    pub fn parse(bytes: &[u8]) -> Result<(Vec<Fat16Cluster>, &[u8]), Box<dyn StdError>> {
+        todo!()
     }
 }
