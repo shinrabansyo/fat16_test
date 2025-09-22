@@ -7,28 +7,6 @@ use serial_test::serial;
 
 #[serial]
 #[test]
-fn fatfs_crate() -> Result<(), Box<dyn StdError>> {
-    use fatfs::{FileSystem as FatFs, FsOptions};
-
-    // fatfs クレートを使用して FatFS を初期化
-    let img_path = init_fat16()?;
-    let img_file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(img_path)?;
-    let fs_opts = FsOptions::new();
-    let fs = FatFs::new(img_file, fs_opts)?;
-
-    // 読み書きしてみる
-    let root_dir = fs.root_dir();
-    let mut file = root_dir.create_file("hello.txt")?;
-    file.write_all(b"Hello World!")?;
-
-    Ok(())
-}
-
-#[serial]
-#[test]
 fn original_crate() -> Result<(), Box<dyn StdError>> {
     use fat16_test::Fat16;
 
@@ -45,7 +23,7 @@ fn original_crate() -> Result<(), Box<dyn StdError>> {
 }
 
 fn init_fat16() -> Result<String, Box<dyn StdError>> {
-    use fatfs::{format_volume, FatType, FormatVolumeOptions};
+    use fatfs::{format_volume, FileSystem as FatFs, FsOptions, FatType, FormatVolumeOptions};
 
     const MB: usize = 1024 * 1024;
 
@@ -73,6 +51,19 @@ fn init_fat16() -> Result<String, Box<dyn StdError>> {
         .volume_id(0xCAFEBABE)
         .volume_label(*b"FAT16IMG   ");
     format_volume(&mut img_file, fmt_opts)?;
+
+    // テスト用のディレクトリ・ファイルを書き込み (準備)
+    let img_file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&img_file_path)?;
+    let fs_opts = FsOptions::new();
+    let fs = FatFs::new(img_file, fs_opts)?;
+
+    // テスト用のディレクトリ・ファイルを書き込み
+    let root_dir = fs.root_dir();
+    let mut file = root_dir.create_file("hello.txt")?;
+    file.write_all(b"Hello World!")?;
 
     Ok(img_file_path)
 }
