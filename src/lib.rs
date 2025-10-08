@@ -181,8 +181,7 @@ impl Fat16AllocTable {
 
 #[derive(Debug)]
 pub struct Fat16DirEntry {
-    filename: [u8; 8],
-    ext: [u8; 3],
+    name: String,
     attribute: u8,
     reserved: u8,
     creation_time: Fat16Time,
@@ -197,9 +196,7 @@ pub struct Fat16DirEntry {
 impl Display for Fat16DirEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // ファイル名
-        let filename = String::from_utf8_lossy(&self.filename);
-        let ext = String::from_utf8_lossy(&self.ext);
-        write!(f, "{}.{}", filename, ext)?;
+        write!(f, "{}", self.name)?;
 
         // 属性
         write!(f, " (attr: ")?;
@@ -217,11 +214,34 @@ impl Display for Fat16DirEntry {
 }
 
 impl Fat16DirEntry {
-    pub fn parse(bytes: &[u8]) -> Result<(Fat16DirEntry, &[u8]), Box<dyn StdError>> {
-        // 8.3 形式
+    pub fn parse(bytes: &[u8]) -> Result<(Option<Fat16DirEntry>, &[u8]), Box<dyn StdError>> {
+        // 使用済みエントリの判定
+        if bytes[0] == 0x00 || bytes[0] == 0xE5 {
+            return Ok((None, bytes));
+        }
+
+        // LFN エントリのパース
+        let (lfn_name, bytes) = Self::parse_lfn(bytes)?;
+
+        // SFN (8.3形式) エントリのパース
+        let (entry, bytes) = Self::parse_sfn(bytes)?;
+        let entry = match (entry, lfn_name) {
+            (Some(mut entry), Some(lfn_name)) => {
+                entry.name = lfn_name;
+                Some(entry)
+            }
+            (entry, _) => entry,
+        };
+
+        Ok((entry, bytes))
+    }
+
+    fn parse_sfn(bytes: &[u8]) -> Result<(Option<Fat16DirEntry>, &[u8]), Box<dyn StdError>> {
         let entry = Fat16DirEntry {
-            filename: bytes[0..8].try_into()?,
-            ext: bytes[8..11].try_into()?,
+            name: format!("{}.{}",
+                String::from_utf8_lossy(&bytes[0..8]).trim(),
+                String::from_utf8_lossy(&bytes[8..11]).trim(),
+            ),
             attribute: bytes[11],
             reserved: bytes[12],
             creation_time: Fat16Time::from((u16::from_le_bytes(bytes[14..16].try_into()?), bytes[13])),
@@ -233,13 +253,50 @@ impl Fat16DirEntry {
             file_size: u32::from_le_bytes(bytes[28..32].try_into()?),
         };
         let bytes = &bytes[32..];
+        Ok((Some(entry), bytes))
+    }
 
-        // LFN エントリ
-        // if entry.attribute == 0x0F {
-        //     todo!();
-        // }
+    // READ_ONLY=0x01 HIDDEN=0x02 SYSTEM=0x04 VOLUME_ID=0x08 DIRECTORY=0x10 ARCHIVE=0x20
+    // LFN=READ_ONLY|HIDDEN|SYSTEM|VOLUME_ID
+    fn parse_lfn(bytes: &[u8]) -> Result<(Option<String>, &[u8]), Box<dyn StdError>> {
+        // LFN 判定
+        if bytes[11] != 0x0f {
+            return Ok((None, bytes));
+        }
 
-        Ok((entry, bytes))
+        // LFN エントリが続く限り読み進める
+        let mut bytes = bytes;
+        let mut text = "".to_string();
+        while bytes[11] == 0x0f {
+            // 文字列部分の抜き取り
+            let text_bytes = [
+                u16::from_le_bytes(bytes[1..3].try_into()?),    // 1文字目
+                u16::from_le_bytes(bytes[3..5].try_into()?),
+                u16::from_le_bytes(bytes[5..7].try_into()?),
+                u16::from_le_bytes(bytes[7..9].try_into()?),
+                u16::from_le_bytes(bytes[9..11].try_into()?),   // 5文字目
+                u16::from_le_bytes(bytes[14..16].try_into()?),  // 6文字目
+                u16::from_le_bytes(bytes[16..18].try_into()?),
+                u16::from_le_bytes(bytes[18..20].try_into()?),
+                u16::from_le_bytes(bytes[20..22].try_into()?),
+                u16::from_le_bytes(bytes[22..24].try_into()?),
+                u16::from_le_bytes(bytes[24..26].try_into()?),  // 11文字目
+                u16::from_le_bytes(bytes[28..30].try_into()?),  // 12文字目
+                u16::from_le_bytes(bytes[30..32].try_into()?),  // 13文字目
+            ];
+            text = String::from_utf16(&text_bytes)? + &text;
+
+            // 読み進める
+            bytes = &bytes[32..];
+        }
+
+        // ヌル終端の除去
+        let text = text.find('\0')
+            .map(|idx| &text[..idx])
+            .unwrap_or(&text)
+            .to_string();
+
+        Ok((Some(text), bytes))
     }
 }
 
@@ -271,10 +328,14 @@ impl Fat16Dir {
             return Err("Directory size is not multiple of 32".into());
         }
 
-        for i in 0..(bytes.len() / 32) {
-            let (entry, _) = Fat16DirEntry::parse(&bytes[i*32..(i+1)*32])?;
-            if entry.filename[0] != 0x00 && entry.filename[0] != 0xE5 { // 未使用エントリ
-                entries.push(entry);
+        let mut bytes = bytes;
+        while bytes.len() > 0 {
+            match Fat16DirEntry::parse(&bytes)? {
+                (Some(entry), rest) => {
+                    entries.push(entry);
+                    bytes = rest;
+                },
+                (None, _) => bytes = &bytes[32..],
             }
         }
 

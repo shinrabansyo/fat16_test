@@ -62,7 +62,7 @@ fn init_fat16() -> Result<String, Box<dyn StdError>> {
 
     // テスト用のディレクトリ・ファイルを書き込み
     let root_dir = fs.root_dir();
-    let mut file = root_dir.create_file("hello.txt")?;
+    let mut file = root_dir.create_file("hello_world_this_is_so_long_file_name.txt")?;
     file.write_all(b"Hello World!")?;
 
     Ok(img_file_path)
