@@ -10,6 +10,7 @@ pub struct Fat16 {
     pub ebpb: Fat16EBPB,
     pub alloc_table: Fat16AllocTable,
     pub root_dir: Vec<Fat16DirEntry>,
+    pub clusters: Vec<u8>,
 }
 
 impl Fat16 {
@@ -24,20 +25,51 @@ impl Fat16 {
         let (ebpb, bytes) = Fat16EBPB::parse(&bytes)?;
         let (alloc_table, bytes) = Fat16AllocTable::parse(&bytes, &bpb)?;
 
-        // Root Directory をパース
-        let root_dir = Fat16DirEntry::parses(&bytes[0..(bpb.root_entry_count as usize)])?;
+        // root_dir_sectors = ((fat_boot->root_entry_count * 32) + (fat_boot->bytes_per_sector - 1)) / fat_boot->bytes_per_sector;
 
-        Ok(Fat16 { bpb, ebpb, alloc_table, root_dir })
+        // Root Directory をパース
+        let (root_dir, bytes) = Fat16DirEntry::parses(&bytes, bpb.root_entry_count)?;
+
+        Ok(Fat16 { bpb, ebpb, alloc_table, root_dir, clusters: bytes.to_vec() })
     }
 
     pub fn read_file(&self, path: &str) -> Result<Vec<u8>, Box<dyn StdError>> {
         // path にマッチする DirEntry を探す
-
+        let mut cluster_number = None;
+        for entry in &self.root_dir {
+            if entry.name == path {
+                cluster_number = Some(entry.first_cluster as u16);
+                break;
+            }
+        }
+        if cluster_number.is_none() {
+            return Err("File not found".into());
+        }
 
         // FAT テーブルの参照
         // クラスタを辿ってデータを取得
+        let cluster_chain = self.alloc_table.get_cluster_chain(cluster_number.unwrap());
+        let mut file = Vec::new();
+        for cluster_number in cluster_chain {
+            let cluster_data = self.read_cluster(cluster_number)?;
+            file.extend(cluster_data);
+        }
 
-        todo!()
+        Ok(file)
+    }
+
+    fn read_cluster(&self, cluster_number: u16) -> Result<Vec<u8>, Box<dyn StdError>> {
+        // (B / S) * (S / C)
+        // B / C
+        let bytes_per_cluster = self.bpb.bytes_per_sector as usize * self.bpb.sectors_per_cluster as usize;
+        let head = (cluster_number as usize - 2) * bytes_per_cluster;
+
+        // 範囲チェック
+        if head + bytes_per_cluster > self.clusters.len() {
+            return Err(format!("Cluster number out of range. len = {}", self.clusters.len()).into());
+        }
+
+        Ok(self.clusters[head..head + bytes_per_cluster].to_vec())
     }
 }
 
@@ -187,6 +219,18 @@ impl Fat16AllocTable {
 
         Ok((Fat16AllocTable { table }, &bytes[fat_size as usize..]))
     }
+
+    pub fn get_cluster_chain(&self, start_cluster: u16) -> Vec<u16> {
+        let mut chain = vec![];
+        let mut cluster = start_cluster;
+
+        while cluster < 0xFFF8 {
+            chain.push(cluster);
+            cluster = self.table[cluster as usize];
+        }
+
+        chain
+    }
 }
 
 #[derive(Debug)]
@@ -224,25 +268,25 @@ impl Display for Fat16DirEntry {
 }
 
 impl Fat16DirEntry {
-    pub fn parses(bytes: &[u8]) -> Result<Vec<Fat16DirEntry>, Box<dyn StdError>> {
+    pub fn parses(bytes: &[u8], num_entry: u16) -> Result<(Vec<Fat16DirEntry>, &[u8]), Box<dyn StdError>> {
         let mut entries = vec![];
 
-        if bytes.len() % 32 != 0 {
-            return Err("Directory size is not multiple of 32".into());
+        if num_entry as usize * 32 > bytes.len() {
+            return Err(format!("'bytes' must be larger than {}.", num_entry * 32).into());
         }
 
-        let mut bytes = bytes;
-        while bytes.len() > 0 {
-            match Fat16DirEntry::parse_entry(&bytes)? {
+        let mut dir_bytes = &bytes[0..(num_entry as usize * 32)];
+        while dir_bytes.len() > 0 {
+            match Fat16DirEntry::parse_entry(&dir_bytes)? {
                 (Some(entry), rest) => {
                     entries.push(entry);
-                    bytes = rest;
+                    dir_bytes = rest;
                 },
-                (None, _) => bytes = &bytes[32..],
+                (None, _) => dir_bytes = &dir_bytes[32..],
             }
         }
 
-        Ok(entries)
+        Ok((entries, &bytes[(num_entry as usize * 32)..]))
     }
 
     pub fn parse_entry(bytes: &[u8]) -> Result<(Option<Fat16DirEntry>, &[u8]), Box<dyn StdError>> {

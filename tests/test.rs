@@ -17,9 +17,17 @@ fn original_crate() -> Result<(), Box<dyn StdError>> {
     assert_eq!(fs.ebpb.boot_partition_signature, [0x55, 0xAA]);
 
     // 読み書きしてみる
-    for entry in fs.root_dir {
+    println!("CTL: List up root directory");
+    println!("-----------------------------------");
+    for entry in &fs.root_dir {
         println!("{}", entry);
     }
+    println!("-----------------------------------");
+
+    println!("CTL: Read the file '1.txt'");
+    println!("-----------------------------------");
+    println!("{:?}", fs.read_file("1.txt")?);
+    println!("-----------------------------------");
 
     Ok(())
 }
@@ -64,11 +72,11 @@ fn init_fat16() -> Result<String, Box<dyn StdError>> {
 
     // テスト用のディレクトリ・ファイルを書き込み
     let root_dir = fs.root_dir();
-    let mut file = root_dir.create_file("this_is_so_long_text_file_no_1.txt")?;
+    let mut file = root_dir.create_file("1.txt")?;
     file.write_all(b"No.1\n")?;
-    let mut file = root_dir.create_file("this_is_so_long_text_file_no_2.txt")?;
+    let mut file = root_dir.create_file("2.txt")?;
     file.write_all(b"No.2\n")?;
-    let mut file = root_dir.create_file("this_is_so_long_text_file_no_3.txt")?;
+    let mut file = root_dir.create_file("3.txt")?;
     file.write_all(b"No.3\n")?;
 
     Ok(img_file_path)
