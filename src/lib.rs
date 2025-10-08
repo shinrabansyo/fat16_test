@@ -9,6 +9,7 @@ pub struct Fat16 {
     pub bpb: Fat16BPB,
     pub ebpb: Fat16EBPB,
     pub alloc_table: Fat16AllocTable,
+    pub root_dir: Vec<Fat16DirEntry>,
 }
 
 impl Fat16 {
@@ -24,10 +25,19 @@ impl Fat16 {
         let (alloc_table, bytes) = Fat16AllocTable::parse(&bytes, &bpb)?;
 
         // Root Directory をパース
-        let root_dir = Fat16Dir::parse(&bytes[0..(bpb.root_entry_count as usize)])?;
-        println!("{}", root_dir);
+        let root_dir = Fat16DirEntry::parses(&bytes[0..(bpb.root_entry_count as usize)])?;
 
-        Ok(Fat16 { bpb, ebpb, alloc_table })
+        Ok(Fat16 { bpb, ebpb, alloc_table, root_dir })
+    }
+
+    pub fn read_file(&self, path: &str) -> Result<Vec<u8>, Box<dyn StdError>> {
+        // path にマッチする DirEntry を探す
+
+
+        // FAT テーブルの参照
+        // クラスタを辿ってデータを取得
+
+        todo!()
     }
 }
 
@@ -214,7 +224,28 @@ impl Display for Fat16DirEntry {
 }
 
 impl Fat16DirEntry {
-    pub fn parse(bytes: &[u8]) -> Result<(Option<Fat16DirEntry>, &[u8]), Box<dyn StdError>> {
+    pub fn parses(bytes: &[u8]) -> Result<Vec<Fat16DirEntry>, Box<dyn StdError>> {
+        let mut entries = vec![];
+
+        if bytes.len() % 32 != 0 {
+            return Err("Directory size is not multiple of 32".into());
+        }
+
+        let mut bytes = bytes;
+        while bytes.len() > 0 {
+            match Fat16DirEntry::parse_entry(&bytes)? {
+                (Some(entry), rest) => {
+                    entries.push(entry);
+                    bytes = rest;
+                },
+                (None, _) => bytes = &bytes[32..],
+            }
+        }
+
+        Ok(entries)
+    }
+
+    pub fn parse_entry(bytes: &[u8]) -> Result<(Option<Fat16DirEntry>, &[u8]), Box<dyn StdError>> {
         // LFN エントリのパース
         let (lfn_name, bytes) = Self::parse_lfn(bytes)?;
 
@@ -302,49 +333,6 @@ impl Fat16DirEntry {
             .to_string();
 
         Ok((Some(text), bytes))
-    }
-}
-
-#[derive(Debug)]
-pub enum Fat16Dir {
-    Entries(Vec<Fat16DirEntry>),
-    File(Vec<u8>),
-}
-
-impl Display for Fat16Dir {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Fat16Dir::Entries(entries) => {
-                for entry in entries {
-                    writeln!(f, "{}", entry)?;
-                }
-                Ok(())
-            },
-            Fat16Dir::File(data) => write!(f, "{:?}", data),
-        }
-    }
-}
-
-impl Fat16Dir {
-    pub fn parse(bytes: &[u8]) -> Result<Fat16Dir, Box<dyn StdError>> {
-        let mut entries = vec![];
-
-        if bytes.len() % 32 != 0 {
-            return Err("Directory size is not multiple of 32".into());
-        }
-
-        let mut bytes = bytes;
-        while bytes.len() > 0 {
-            match Fat16DirEntry::parse(&bytes)? {
-                (Some(entry), rest) => {
-                    entries.push(entry);
-                    bytes = rest;
-                },
-                (None, _) => bytes = &bytes[32..],
-            }
-        }
-
-        Ok(Fat16Dir::Entries(entries))
     }
 }
 

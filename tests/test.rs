@@ -17,7 +17,9 @@ fn original_crate() -> Result<(), Box<dyn StdError>> {
     assert_eq!(fs.ebpb.boot_partition_signature, [0x55, 0xAA]);
 
     // 読み書きしてみる
-    todo!();
+    for entry in fs.root_dir {
+        println!("{}", entry);
+    }
 
     Ok(())
 }
