@@ -215,11 +215,6 @@ impl Display for Fat16DirEntry {
 
 impl Fat16DirEntry {
     pub fn parse(bytes: &[u8]) -> Result<(Option<Fat16DirEntry>, &[u8]), Box<dyn StdError>> {
-        // 使用済みエントリの判定
-        if bytes[0] == 0x00 || bytes[0] == 0xE5 {
-            return Ok((None, bytes));
-        }
-
         // LFN エントリのパース
         let (lfn_name, bytes) = Self::parse_lfn(bytes)?;
 
@@ -237,6 +232,15 @@ impl Fat16DirEntry {
     }
 
     fn parse_sfn(bytes: &[u8]) -> Result<(Option<Fat16DirEntry>, &[u8]), Box<dyn StdError>> {
+        // 有効エントリの判定
+        if bytes[0] == 0x00 || bytes[0] == 0xE5 {
+            if bytes[0] == 0xE5 {
+                println!("this is removed entry!");
+            }
+            return Ok((None, bytes));
+        }
+
+        // SFN エントリの読み込み
         let entry = Fat16DirEntry {
             name: format!("{}.{}",
                 String::from_utf8_lossy(&bytes[0..8]).trim(),
@@ -253,6 +257,7 @@ impl Fat16DirEntry {
             file_size: u32::from_le_bytes(bytes[28..32].try_into()?),
         };
         let bytes = &bytes[32..];
+
         Ok((Some(entry), bytes))
     }
 
