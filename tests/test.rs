@@ -26,7 +26,10 @@ fn original_crate() -> Result<(), Box<dyn StdError>> {
 
     println!("CTL: Read the file '1.txt'");
     println!("-----------------------------------");
-    println!("{:?}", fs.read_file("1.txt")?);
+    let bins = fs.read_file("1.txt")?;
+    let chars = bins.iter().map(|b| *b as char).collect::<String>();
+    println!("{:?}", bins);
+    print!("{}", chars);
     println!("-----------------------------------");
 
     Ok(())
@@ -70,7 +73,7 @@ fn init_fat16() -> Result<String, Box<dyn StdError>> {
     let fs_opts = FsOptions::new();
     let fs = FatFs::new(img_file, fs_opts)?;
 
-    // テスト用のディレクトリ・ファイルを書き込み
+    // ルートディレクトリにいくつかファイルを作成
     let root_dir = fs.root_dir();
     let mut file = root_dir.create_file("1.txt")?;
     file.write_all(b"No.1\n")?;
@@ -78,6 +81,33 @@ fn init_fat16() -> Result<String, Box<dyn StdError>> {
     file.write_all(b"No.2\n")?;
     let mut file = root_dir.create_file("3.txt")?;
     file.write_all(b"No.3\n")?;
+
+    // テストディレクトリ(1)の作成
+    let sub_dir = root_dir.create_dir("test_dir_1")?; // mkdir /test_dir_1/
+    let mut file = sub_dir.create_file("1.txt")?;     // touch /test_dir_1/1.txt
+    file.write_all(b"No.1-1\n")?;                     // echo "No.1-1" > /test_dir_1/1.txt
+    let mut file = sub_dir.create_file("2.txt")?;     // touch /test_dir_1/2.txt
+    file.write_all(b"No.1-2\n")?;                     // echo "No.1-2" > /test_dir_1/2.txt
+    let mut file = sub_dir.create_file("3.txt")?;     // touch /test_dir_1/3.txt
+    file.write_all(b"No.1-3\n")?;                     // echo "No.1-3" > /test_dir_1/3.txt
+
+    // テストディレクトリ(1)の中にさらにディレクトリを作成
+    let sub_dir = sub_dir.create_dir("test_dir_1_1")?; // mkdir /test_dir_1/test_dir_1_1/
+    let mut file = sub_dir.create_file("1.txt")?;      // touch /test_dir_1/test_dir_1_1/1.txt
+    file.write_all(b"No.1-1-1\n")?;                    // echo "No.1-1-1" > /test_dir_1/test_dir_1_1/
+    let mut file = sub_dir.create_file("2.txt")?;      // touch /test_dir_1/test_dir_1_1/2.txt
+    file.write_all(b"No.1-1-2\n")?;                    // echo "No.1-1-2" > /test_dir_1/test_dir_1_1/
+    let mut file = sub_dir.create_file("3.txt")?;      // touch /test_dir_1/test_dir_1_1/3.txt
+    file.write_all(b"No.1-1-3\n")?;                    // echo "No.1-1-3" > /test_dir_1/test_dir_1_1/
+
+    // テストディレクトリ(2)の作成
+    let sub_dir = root_dir.create_dir("test_dir_2")?; // mkdir /test_dir_2/
+    let mut file = sub_dir.create_file("1.txt")?;     // touch /test_dir_2/1.txt
+    file.write_all(b"No.2-1\n")?;                     // echo "No.2-1" > /test_dir_2/1.txt
+    let mut file = sub_dir.create_file("2.txt")?;     // touch /test_dir_2/2.txt
+    file.write_all(b"No.2-2\n")?;                     // echo "No.2-2" > /test_dir_2/2.txt
+    let mut file = sub_dir.create_file("3.txt")?;     // touch /test_dir_2/3.txt
+    file.write_all(b"No.2-3\n")?;                     // echo "No.2-3" > /test_dir_2/3.txt
 
     Ok(img_file_path)
 }

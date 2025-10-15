@@ -35,25 +35,21 @@ impl Fat16 {
 
     pub fn read_file(&self, path: &str) -> Result<Vec<u8>, Box<dyn StdError>> {
         // path にマッチする DirEntry を探す
-        let mut cluster_number = None;
-        for entry in &self.root_dir {
-            if entry.name == path {
-                cluster_number = Some(entry.first_cluster as u16);
-                break;
-            }
-        }
-        if cluster_number.is_none() {
-            return Err("File not found".into());
-        }
+        let entry = self
+            .root_dir
+            .iter()
+            .find(|e| e.name == path)
+            .ok_or("File not found")?;
 
         // FAT テーブルの参照
         // クラスタを辿ってデータを取得
-        let cluster_chain = self.alloc_table.get_cluster_chain(cluster_number.unwrap());
+        let cluster_chain = self.alloc_table.get_cluster_chain(entry.first_cluster as u16);
         let mut file = Vec::new();
         for cluster_number in cluster_chain {
             let cluster_data = self.read_cluster(cluster_number)?;
             file.extend(cluster_data);
         }
+        file.truncate(entry.file_size as usize);
 
         Ok(file)
     }
