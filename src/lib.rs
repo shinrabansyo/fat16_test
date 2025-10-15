@@ -1,8 +1,25 @@
 use std::error::Error as StdError;
 use std::fs::File;
-use std::path::Path;
+use std::path::Path as StdPath;
 use std::io::Read;
 use std::fmt::Display;
+
+#[derive(Debug)]
+pub struct Path {
+    abs_path: String,
+}
+
+impl From<&str> for Path {
+    fn from(s: &str) -> Path {
+        Path { abs_path: s.to_string().to_ascii_lowercase() }
+    }
+}
+
+impl Path {
+    pub fn parse(&self) -> Vec<&str> {
+        self.abs_path[1..].split('/').into_iter().collect()
+    }
+}
 
 #[derive(Debug)]
 pub struct Fat16 {
@@ -14,7 +31,7 @@ pub struct Fat16 {
 }
 
 impl Fat16 {
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<Fat16, Box<dyn StdError>> {
+    pub fn new<P: AsRef<StdPath>>(path: P) -> Result<Fat16, Box<dyn StdError>> {
         // ファイルを読み込む
         let mut file = File::open(path).unwrap();
         let mut bytes = Vec::new();
@@ -33,13 +50,9 @@ impl Fat16 {
         Ok(Fat16 { bpb, ebpb, alloc_table, root_dir, clusters: bytes.to_vec() })
     }
 
-    pub fn read_file(&self, path: &str) -> Result<Vec<u8>, Box<dyn StdError>> {
+    pub fn read_file(&self, path: &Path) -> Result<Vec<u8>, Box<dyn StdError>> {
         // path にマッチする DirEntry を探す
-        let entry = self
-            .root_dir
-            .iter()
-            .find(|e| e.name == path)
-            .ok_or("File not found")?;
+        let entry = self.find_dir_entry(path)?;
 
         // FAT テーブルの参照
         // クラスタを辿ってデータを取得
@@ -54,7 +67,13 @@ impl Fat16 {
         Ok(file)
     }
 
-    fn read_cluster(&self, cluster_number: u16) -> Result<Vec<u8>, Box<dyn StdError>> {
+    pub fn read_directory(&self, path: &Path) -> Result<Vec<Fat16DirEntry>, Box<dyn StdError>> {
+        // path にマッチする DirEntry を探す
+        let entry = self.find_dir_entry(path)?;
+        self.read_dir_entry(&entry)
+    }
+
+    fn read_cluster<'a>(&'a self, cluster_number: u16) -> Result<&'a [u8], Box<dyn StdError>> {
         // (B / S) * (S / C)
         // B / C
         let bytes_per_cluster = self.bpb.bytes_per_sector as usize * self.bpb.sectors_per_cluster as usize;
@@ -65,7 +84,44 @@ impl Fat16 {
             return Err(format!("Cluster number out of range. len = {}", self.clusters.len()).into());
         }
 
-        Ok(self.clusters[head..head + bytes_per_cluster].to_vec())
+        Ok(&self.clusters[head..head + bytes_per_cluster])
+    }
+
+    fn find_dir_entry(&self, path: &Path) -> Result<Fat16DirEntry, Box<dyn StdError>> {
+        // path にマッチする DirEntry を探す
+        let dirs = path.parse();
+
+        let mut entry = self.root_dir.clone();
+        for dir in &dirs[..dirs.len()-1] {
+            let d = entry
+                .iter()
+                .find(|e| &e.name.to_ascii_lowercase() == dir)
+                .ok_or("No such file or direcotry")?;
+            entry = self.read_dir_entry(d)?;
+        }
+
+        entry
+            .into_iter()
+            .find(|e| &e.name.to_ascii_lowercase() == dirs[dirs.len()-1])
+            .ok_or("No such file or direcotry".into())
+    }
+
+    fn read_dir_entry(&self, dir_entry: &Fat16DirEntry) -> Result<Vec<Fat16DirEntry>, Box<dyn StdError>> {
+        // FAT テーブルの参照
+        // クラスタを辿ってデータを取得
+        let bytes_per_cluster = self.bpb.bytes_per_sector as usize * self.bpb.sectors_per_cluster as usize;
+        let bytes_per_entry = 32;
+        let entries_per_cluster = (bytes_per_cluster / bytes_per_entry) as u16;
+
+        let cluster_chain = self.alloc_table.get_cluster_chain(dir_entry.first_cluster as u16);
+        let mut dirs = Vec::new();
+        for cluster_number in cluster_chain {
+            let cluster_data = self.read_cluster(cluster_number)?;
+            let (part_of_dirs, _) = Fat16DirEntry::parses(cluster_data, entries_per_cluster)?;
+            dirs.extend(part_of_dirs);
+        }
+
+        Ok(dirs)
     }
 }
 
@@ -229,7 +285,7 @@ impl Fat16AllocTable {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Fat16DirEntry {
     name: String,
     attribute: u8,
@@ -376,7 +432,7 @@ impl Fat16DirEntry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Fat16Date {
     pub year: u16,
     pub month: u8,
@@ -393,7 +449,7 @@ impl From<u16> for Fat16Date {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Fat16Time {
     pub hour: u8,
     pub minute: u8,

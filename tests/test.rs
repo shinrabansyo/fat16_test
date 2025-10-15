@@ -17,16 +17,40 @@ fn original_crate() -> Result<(), Box<dyn StdError>> {
     assert_eq!(fs.ebpb.boot_partition_signature, [0x55, 0xAA]);
 
     // 読み書きしてみる
-    println!("CTL: List up root directory");
+    println!("\n◎ CTL: List up root directory");
     println!("-----------------------------------");
     for entry in &fs.root_dir {
         println!("{}", entry);
     }
     println!("-----------------------------------");
 
-    println!("CTL: Read the file '1.txt'");
+    println!("\n◎ CTL: Read the file '1.txt'");
     println!("-----------------------------------");
-    let bins = fs.read_file("1.txt")?;
+    let bins = fs.read_file(&"/1.txt".into())?;
+    let chars = bins.iter().map(|b| *b as char).collect::<String>();
+    println!("{:?}", bins);
+    print!("{}", chars);
+    println!("-----------------------------------");
+
+    println!("\n◎ CTL: List up directory '/test_dir_1'");
+    println!("-----------------------------------");
+    let entries = fs.read_directory(&"/test_dir_1".into())?;
+    for entry in &entries {
+        println!("{}", entry);
+    }
+    println!("-----------------------------------");
+
+    println!("\n◎ CTL: List up directory '/test_dir_1/test_dir_1_1'");
+    println!("-----------------------------------");
+    let entries = fs.read_directory(&"/test_dir_1/test_dir_1_1".into())?;
+    for entry in &entries {
+        println!("{}", entry);
+    }
+    println!("-----------------------------------");
+
+    println!("\n◎ CTL: Read the file '/test_dir_1/test_dir_1_1/2.txt'");
+    println!("-----------------------------------");
+    let bins = fs.read_file(&"/test_dir_1/test_dir_1_1/2.txt".into())?;
     let chars = bins.iter().map(|b| *b as char).collect::<String>();
     println!("{:?}", bins);
     print!("{}", chars);
