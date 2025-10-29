@@ -56,6 +56,15 @@ fn original_crate() -> Result<(), Box<dyn StdError>> {
     print!("{}", chars);
     println!("-----------------------------------");
 
+    println!("\n◎ CTL: Read the file '/test_dir_3/long_1.txt'");
+    println!("-----------------------------------");
+    let bins = fs.read_file(&"/test_dir_3/long_1.txt".into())?;
+    let chars = bins.iter().map(|b| *b as char).collect::<String>();
+    println!("{:?}", bins);
+    println!("{}", chars);
+    println!("{}", chars.len());
+    println!("-----------------------------------");
+
     Ok(())
 }
 
@@ -132,6 +141,15 @@ fn init_fat16() -> Result<String, Box<dyn StdError>> {
     file.write_all(b"No.2-2\n")?;                     // echo "No.2-2" > /test_dir_2/2.txt
     let mut file = sub_dir.create_file("3.txt")?;     // touch /test_dir_2/3.txt
     file.write_all(b"No.2-3\n")?;                     // echo "No.2-3" > /test_dir_2/3.txt
+
+    // // テストディレクトリ(3)の作成
+    let sub_dir = root_dir.create_dir("test_dir_3")?; // mkdir /test_dir_3/
+    let mut file = sub_dir.create_file("long_1.txt")?;     // touch /test_dir_3/long_1.txt
+    file.write_all(&[0x61; 3000])?;                     // echo "A"*3000 > /test_dir_3/long_1.txt
+    let mut file = sub_dir.create_file("long_2.txt")?;     // touch /test_dir_3/long_2.txt
+    file.write_all(&[0x62; 3000])?;                     // echo "B"*3000 > /test_dir_3/long_2.txt
+    let mut file = sub_dir.create_file("long_3.txt")?;     // touch /test_dir_3/long_3.txt
+    file.write_all(&[0x63; 3000])?;                     // echo "C"*3000 > /test_dir_3/long_3.txt
 
     Ok(img_file_path)
 }
