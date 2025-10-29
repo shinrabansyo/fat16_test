@@ -1,5 +1,5 @@
 [package]
-name = "fat16_test"
+name = "fat_test"
 version = "0.1.0"
 edition = "2024"
 
