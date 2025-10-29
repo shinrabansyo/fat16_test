@@ -78,17 +78,17 @@ fn init_fat32() -> Result<String, Box<dyn StdError>> {
     let img_file_path = format!("{}/target/tmp/fat32.img", out_dir);
 
     // テスト用のイメージファイルを準備
+    let fmt_size = 512 * MB;
     if fs::exists(&img_file_path)? {
         fs::remove_file(&img_file_path)?;
     }
     let mut img_file = File::create(&img_file_path)?;
+    img_file.set_len(fmt_size as u64)?;
 
-    // FAT16 でフォーマット
-    let fmt_size = 128 * MB;
+    // FAT32 でフォーマット
     let fmt_opts = FormatVolumeOptions::new()
         .bytes_per_sector(512)
         .total_sectors((fmt_size / 512) as u32)
-        .max_root_dir_entries(512)
         .fats(2)
         .fat_type(FatType::Fat32)
         .sectors_per_track(0x20)
