@@ -7,8 +7,8 @@ use serial_test::serial;
 
 #[serial]
 #[test]
-fn original_crate() -> Result<(), Box<dyn StdError>> {
-    use fat_test::Fat16;
+fn fat16() -> Result<(), Box<dyn StdError>> {
+    use fat_test::fat16::Fat16;
 
     // fatfs クレートを使用して FatFS を初期化
     let img_path = init_fat16()?;
