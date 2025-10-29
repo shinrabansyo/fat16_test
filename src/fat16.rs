@@ -4,22 +4,8 @@ use std::path::Path as StdPath;
 use std::io::Read;
 use std::fmt::Display;
 
-#[derive(Debug)]
-pub struct Path {
-    abs_path: String,
-}
-
-impl From<&str> for Path {
-    fn from(s: &str) -> Path {
-        Path { abs_path: s.to_string().to_ascii_lowercase() }
-    }
-}
-
-impl Path {
-    pub fn parse(&self) -> Vec<&str> {
-        self.abs_path[1..].split('/').into_iter().collect()
-    }
-}
+use crate::utils::Path as MyPath;
+use crate::utils::{FatDate, FatTime};
 
 #[derive(Debug)]
 pub struct Fat16 {
@@ -50,7 +36,7 @@ impl Fat16 {
         Ok(Fat16 { bpb, ebpb, alloc_table, root_dir, clusters: bytes.to_vec() })
     }
 
-    pub fn read_file(&self, path: &Path) -> Result<Vec<u8>, Box<dyn StdError>> {
+    pub fn read_file(&self, path: &MyPath) -> Result<Vec<u8>, Box<dyn StdError>> {
         // path にマッチする DirEntry を探す
         let entry = self.find_dir_entry(path)?;
 
@@ -67,7 +53,7 @@ impl Fat16 {
         Ok(file)
     }
 
-    pub fn read_directory(&self, path: &Path) -> Result<Vec<Fat16DirEntry>, Box<dyn StdError>> {
+    pub fn read_directory(&self, path: &MyPath) -> Result<Vec<Fat16DirEntry>, Box<dyn StdError>> {
         // path にマッチする DirEntry を探す
         let entry = self.find_dir_entry(path)?;
         self.read_dir_entry(&entry)
@@ -87,7 +73,7 @@ impl Fat16 {
         Ok(&self.clusters[head..head + bytes_per_cluster])
     }
 
-    fn find_dir_entry(&self, path: &Path) -> Result<Fat16DirEntry, Box<dyn StdError>> {
+    fn find_dir_entry(&self, path: &MyPath) -> Result<Fat16DirEntry, Box<dyn StdError>> {
         // path にマッチする DirEntry を探す
         let dirs = path.parse();
 
@@ -290,11 +276,11 @@ pub struct Fat16DirEntry {
     name: String,
     attribute: u8,
     reserved: u8,
-    creation_time: Fat16Time,
-    creation_date: Fat16Date,
-    last_access_date: Fat16Date,
-    last_modify_time: Fat16Time,
-    last_modify_date: Fat16Date,
+    creation_time: FatTime,
+    creation_date: FatDate,
+    last_access_date: FatDate,
+    last_modify_time: FatTime,
+    last_modify_date: FatDate,
     first_cluster: u32,
     file_size: u32,
 }
@@ -375,11 +361,11 @@ impl Fat16DirEntry {
             ),
             attribute: bytes[11],
             reserved: bytes[12],
-            creation_time: Fat16Time::from((u16::from_le_bytes(bytes[14..16].try_into()?), bytes[13])),
-            creation_date: Fat16Date::from(u16::from_le_bytes(bytes[16..18].try_into()?)),
-            last_access_date: Fat16Date::from(u16::from_le_bytes(bytes[18..20].try_into()?)),
-            last_modify_time: Fat16Time::from(u16::from_le_bytes(bytes[22..24].try_into()?)),
-            last_modify_date: Fat16Date::from(u16::from_le_bytes(bytes[24..26].try_into()?)),
+            creation_time: FatTime::from((u16::from_le_bytes(bytes[14..16].try_into()?), bytes[13])),
+            creation_date: FatDate::from(u16::from_le_bytes(bytes[16..18].try_into()?)),
+            last_access_date: FatDate::from(u16::from_le_bytes(bytes[18..20].try_into()?)),
+            last_modify_time: FatTime::from(u16::from_le_bytes(bytes[22..24].try_into()?)),
+            last_modify_date: FatDate::from(u16::from_le_bytes(bytes[24..26].try_into()?)),
             first_cluster: u16::from_le_bytes(bytes[26..28].try_into()?) as u32            ,
             file_size: u32::from_le_bytes(bytes[28..32].try_into()?),
         };
@@ -429,47 +415,5 @@ impl Fat16DirEntry {
             .to_string();
 
         Ok((Some(text), bytes))
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Fat16Date {
-    pub year: u16,
-    pub month: u8,
-    pub day: u8,
-}
-
-impl From<u16> for Fat16Date {
-    fn from(date: u16) -> Fat16Date {
-        Fat16Date {
-            year: ((date >> 9) & 0x7F) + 1980,
-            month: ((date >> 5) & 0x0F) as u8,
-            day: (date & 0x1F) as u8,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Fat16Time {
-    pub hour: u8,
-    pub minute: u8,
-    pub second: u8,
-    pub tenths_of_second: u8,
-}
-
-impl From<u16> for Fat16Time {
-    fn from(time: u16) -> Fat16Time {
-        Fat16Time::from((time, 0))
-    }
-}
-
-impl From<(u16, u8)> for Fat16Time {
-    fn from((time, tenths_of_second): (u16, u8)) -> Fat16Time {
-        Fat16Time {
-            hour: ((time >> 11) & 0x1F) as u8,
-            minute: ((time >> 5) & 0x3F) as u8,
-            second: ((time & 0x1F) * 2) as u8,
-            tenths_of_second,
-        }
     }
 }
